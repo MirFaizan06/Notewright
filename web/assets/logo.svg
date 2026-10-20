@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Notewright">
+  <defs>
+    <linearGradient id="nw-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a241e"/>
+      <stop offset="1" stop-color="#14110e"/>
+    </linearGradient>
+    <linearGradient id="nw-amber" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f0b45a"/>
+      <stop offset="1" stop-color="#e08a3c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#nw-bg)"/>
+  <rect x="3" y="3" width="506" height="506" rx="113" fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="2"/>
+  <!-- sound wave -->
+  <path d="M74 256 C 96 256, 100 168, 124 168 S 152 344, 176 344 S 204 196, 224 196 S 240 256, 262 256"
+        fill="none" stroke="#f4eee3" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- note bars -->
+  <rect x="286" y="150" width="104" height="38" rx="19" fill="url(#nw-amber)"/>
+  <rect x="318" y="206" width="124" height="38" rx="19" fill="url(#nw-amber)"/>
+  <rect x="286" y="262" width="70" height="38" rx="19" fill="url(#nw-amber)"/>
+  <rect x="372" y="318" width="70" height="38" rx="19" fill="url(#nw-amber)"/>
+</svg>

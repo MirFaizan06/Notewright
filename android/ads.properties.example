@@ -1,0 +1,6 @@
+# Copy to ads.properties (git-ignored) and fill in your own AdMob ids.
+# Leave a line out to keep Google's public test id for it (test ads only, no revenue).
+# Build with:  ./gradlew assembleRelease -Pads=admob
+admobAppId=ca-app-pub-0000000000000000~0000000000
+admobRewardedUnit=ca-app-pub-0000000000000000/0000000000
+admobBannerUnit=ca-app-pub-0000000000000000/0000000000

@@ -1,0 +1,81 @@
+name: Release
+
+# Push a tag such as v1.2.0 (it must match "version" in package.json) to publish.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check the tag matches package.json
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} does not match package.json version v$v"; exit 1; }
+
+      - run: npm test
+
+      - name: Build the web app
+        env:
+          NW_ADS_ENABLED: ${{ vars.WEB_ADS || 'false' }}
+        run: |
+          npm run build
+          mkdir -p release
+          cp dist/web/index.html "release/Notewright-${GITHUB_REF_NAME}-web.html"
+
+      - name: Prepare signing (optional)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/release.jks
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/keystore.properties
+          else
+            echo "No signing secrets set: the APK will be signed with the debug key."
+          fi
+
+      - name: Prepare ads (optional)
+        env:
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_REWARDED_UNIT: ${{ secrets.ADMOB_REWARDED_UNIT }}
+          ADMOB_BANNER_UNIT: ${{ secrets.ADMOB_BANNER_UNIT }}
+        run: |
+          if [ -n "$ADMOB_APP_ID" ]; then
+            printf 'admobAppId=%s\nadmobRewardedUnit=%s\nadmobBannerUnit=%s\n' \
+              "$ADMOB_APP_ID" "$ADMOB_REWARDED_UNIT" "$ADMOB_BANNER_UNIT" > android/ads.properties
+            echo "ADS_FLAG=-Pads=admob" >> "$GITHUB_ENV"
+          else
+            echo "No AdMob secrets set: building without an ad SDK."
+          fi
+
+      - name: Build the Android app
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease ${ADS_FLAG} --no-daemon
+          cp app/build/outputs/apk/release/*.apk "../release/Notewright-${GITHUB_REF_NAME}.apk"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/* \
+            --title "Notewright ${GITHUB_REF_NAME}" \
+            --notes-file <(node scripts/release-notes.mjs "${GITHUB_REF_NAME}")

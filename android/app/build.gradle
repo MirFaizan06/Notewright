@@ -1,0 +1,109 @@
+plugins {
+    id 'com.android.application'
+}
+
+// One version for every platform: package.json at the repository root.
+def pkg = new groovy.json.JsonSlurper().parse(file('../../package.json'))
+def (vMajor, vMinor, vPatch) = pkg.version.tokenize('.').collect { it.replaceAll(/\D.*/, '') as int }
+
+// Ads: the default build has no ad SDK. Build with -Pads=admob to include AdMob.
+// Ids come from android/ads.properties (git-ignored, see ads.properties.example) or -P flags.
+// Without them Google's public test ids are used, which show test ads only.
+def adsMode = findProperty('ads') ?: 'none'
+def adsProps = new Properties()
+def adsFile = rootProject.file('ads.properties')
+if (adsFile.exists()) adsFile.withInputStream { adsProps.load(it) }
+def adId = { String key, String test -> (findProperty(key) ?: adsProps[key] ?: test) as String }
+def admobAppId = adId('admobAppId', 'ca-app-pub-3940256099942544~3347511713')
+def admobRewarded = adId('admobRewardedUnit', 'ca-app-pub-3940256099942544/5224354917')
+def admobBanner = adId('admobBannerUnit', 'ca-app-pub-3940256099942544/9214589741')
+// comma-separated hashed device ids (from logcat) that always get test ads and can preview the consent form
+def admobTestDevices = adId('admobTestDevices', '')
+def admobConsentDebug = adId('admobConsentDebug', 'false')
+
+// Optional release signing: copy keystore.properties.example to keystore.properties.
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it) }
+
+android {
+    namespace = 'app.notewright'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = 'app.notewright'
+        minSdk = 26
+        targetSdk = 36
+        versionCode = vMajor * 10000 + vMinor * 100 + vPatch
+        versionName = pkg.version
+        manifestPlaceholders = [admobAppId: admobAppId]
+        buildConfigField 'String', 'ADMOB_REWARDED_UNIT', "\"${admobRewarded}\""
+        buildConfigField 'String', 'ADMOB_BANNER_UNIT', "\"${admobBanner}\""
+        buildConfigField 'String', 'ADMOB_TEST_DEVICES', "\"${admobTestDevices}\""
+        buildConfigField 'boolean', 'ADMOB_CONSENT_DEBUG', admobConsentDebug
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile.exists()) {
+                storeFile = rootProject.file(keystoreProps['storeFile'])
+                storePassword = keystoreProps['storePassword']
+                keyAlias = keystoreProps['keyAlias']
+                keyPassword = keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Without a keystore the release build is signed with the debug key so it still installs.
+            signingConfig = keystoreFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            java.srcDir adsMode == 'admob' ? 'src/admob/java' : 'src/noads/java'
+            assets.srcDir(file("$buildDir/generated/assets"))
+        }
+    }
+
+    lint {
+        abortOnError = false
+    }
+}
+
+// The app is the web build wrapped in a WebView: build it first (needs Node 18+ on PATH).
+def buildWeb = tasks.register('buildWeb', Exec) {
+    workingDir = rootProject.projectDir.parentFile
+    // with an ad SDK: use AdMob. Without one: no ads at all (no placeholders in a shipped app)
+    if (adsMode == 'admob') { environment 'NW_ADS_ENABLED', 'true'; environment 'NW_AD_PROVIDER', 'native' }
+    else environment 'NW_ADS_ENABLED', 'false'
+    commandLine 'node', 'scripts/build-web.mjs', '--out', layout.buildDirectory.dir('generated/assets/web').get().asFile.absolutePath
+    inputs.dir(new File(rootProject.projectDir.parentFile, 'web'))
+    inputs.dir(new File(rootProject.projectDir.parentFile, 'core'))
+    inputs.file(new File(rootProject.projectDir.parentFile, 'package.json'))
+    outputs.dir(layout.buildDirectory.dir('generated/assets/web'))
+}
+tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn buildWeb }
+
+dependencies {
+    // Intentionally empty: the app uses only the Android framework.
+    if (adsMode == 'admob') {
+        implementation 'com.google.android.gms:play-services-ads:24.2.0'
+        implementation 'com.google.android.ump:user-messaging-platform:3.1.0'
+    }
+}
+

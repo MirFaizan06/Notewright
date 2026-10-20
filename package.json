@@ -1,0 +1,18 @@
+{
+  "name": "notewright",
+  "version": "1.0.0",
+  "description": "Piano audio to MIDI. Accurate, private, and dependency-free.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node scripts/serve.mjs . 8080",
+    "build": "node scripts/build-web.mjs",
+    "build:android": "node scripts/build-web.mjs --out android/app/build/generated/web",
+    "test": "node --test",
+    "check:ads": "node scripts/check-ads.mjs"
+  }
+}

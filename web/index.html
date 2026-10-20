@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#14110e">
+<meta name="description" content="Notewright turns piano recordings into accurate MIDI files. Runs entirely on your device.">
+<title>Notewright</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Splash -->
+<div id="splash" aria-hidden="true">
+  <svg class="splash-mark" viewBox="0 0 512 512" width="132" height="132">
+    <defs>
+      <linearGradient id="sp-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a241e"/><stop offset="1" stop-color="#14110e"/></linearGradient>
+      <linearGradient id="sp-amber" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f0b45a"/><stop offset="1" stop-color="#e08a3c"/></linearGradient>
+    </defs>
+    <rect class="sp-tile" width="512" height="512" rx="116" fill="url(#sp-bg)"/>
+    <rect x="3" y="3" width="506" height="506" rx="113" fill="none" stroke="#fff" stroke-opacity=".07" stroke-width="2"/>
+    <path class="sp-wave" d="M74 256 C 96 256, 100 168, 124 168 S 152 344, 176 344 S 204 196, 224 196 S 240 256, 262 256" fill="none" stroke="#f4eee3" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/>
+    <rect class="sp-bar b1" x="286" y="150" width="104" height="38" rx="19" fill="url(#sp-amber)"/>
+    <rect class="sp-bar b2" x="318" y="206" width="124" height="38" rx="19" fill="url(#sp-amber)"/>
+    <rect class="sp-bar b3" x="286" y="262" width="70" height="38" rx="19" fill="url(#sp-amber)"/>
+    <rect class="sp-bar b4" x="372" y="318" width="70" height="38" rx="19" fill="url(#sp-amber)"/>
+  </svg>
+  <div class="splash-word">Notewright</div>
+  <div class="splash-sub">Piano audio to MIDI</div>
+</div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <button class="brand" id="brand" type="button" aria-label="Notewright home">
+      <img src="assets/logo.svg" alt="" width="30" height="30">
+      <span>Notewright</span>
+    </button>
+    <div class="topbar-right">
+      <button class="icon-btn" id="btn-about" type="button" aria-label="About and updates">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- HOME -->
+    <section id="view-home" class="view">
+      <div class="hero">
+        <h1>Piano audio, <em>written down.</em></h1>
+        <p class="lead">Drop in a recording and get a note-accurate MIDI file: every key, its timing, its length, and how hard it was played. Nothing leaves your device.</p>
+      </div>
+
+      <label id="drop" class="drop" tabindex="0">
+        <input id="file" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.webm" hidden>
+        <span class="drop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        </span>
+        <span class="drop-title">Choose an audio file</span>
+        <span class="drop-hint"><span class="only-fine">or drag it here &middot; </span>MP3, WAV, M4A, FLAC, OGG</span>
+      </label>
+
+      <div id="picked" class="picked" hidden>
+        <div class="picked-file">
+          <span class="file-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+          </span>
+          <span class="file-meta"><strong id="picked-name">file.mp3</strong><small id="picked-info">Decoding…</small></span>
+          <button class="link-btn" id="picked-clear" type="button">Change</button>
+        </div>
+        <button id="convert" class="btn btn-primary" type="button" disabled>Convert to MIDI</button>
+      </div>
+
+      <details class="options" id="options">
+        <summary><span>Fine-tuning</span><small>defaults work for most recordings</small></summary>
+        <div class="options-body">
+          <div class="opt">
+            <div class="opt-head"><label for="opt-sens">Sensitivity</label><output id="opt-sens-val">Balanced</output></div>
+            <input id="opt-sens" type="range" min="0" max="100" value="50">
+            <div class="range-ends"><span>Cleaner</span><span>Catch faint notes</span></div>
+          </div>
+          <div class="opt">
+            <div class="opt-head"><label>Note length</label></div>
+            <div class="seg" id="opt-length" role="radiogroup" aria-label="Note length">
+              <button type="button" role="radio" aria-checked="true" data-v="natural">As played</button>
+              <button type="button" role="radio" aria-checked="false" data-v="tight">Tight</button>
+            </div>
+            <p class="opt-note">“As played” follows the sound, including notes held by the sustain pedal. “Tight” ends notes at the first sign of release.</p>
+          </div>
+          <div class="opt">
+            <div class="opt-head"><label>Tuning</label></div>
+            <div class="seg" id="opt-tuning" role="radiogroup" aria-label="Tuning">
+              <button type="button" role="radio" aria-checked="true" data-v="auto">Detect</button>
+              <button type="button" role="radio" aria-checked="false" data-v="440">A = 440 Hz</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <ul class="points">
+        <li><strong>Built for piano</strong><span>Models real strings, including their slight inharmonic stretch, instead of guessing from generic pitch tracking.</span></li>
+        <li><strong>Reverb-aware</strong><span>New notes are separated from room tails, echoes and held pedal, so ringing does not become ghost notes.</span></li>
+        <li><strong>Private by design</strong><span>All analysis runs locally. Your recordings are never uploaded.</span></li>
+      </ul>
+    </section>
+
+    <!-- WORKING -->
+    <section id="view-work" class="view" hidden>
+      <div class="work-card">
+        <div class="ring" id="ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <svg viewBox="0 0 120 120" width="148" height="148" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" class="ring-bg"/>
+            <circle cx="60" cy="60" r="52" class="ring-fg" id="ring-fg" pathLength="100"/>
+          </svg>
+          <div class="ring-text"><span id="ring-pct">0</span><small>%</small></div>
+        </div>
+        <h2 id="work-title">Converting</h2>
+        <p class="work-file" id="work-file"></p>
+        <ol class="stages" id="stages">
+          <li data-s="decode"><i></i>Reading the recording</li>
+          <li data-s="tune"><i></i>Measuring tuning</li>
+          <li data-s="spectrum"><i></i>Analysing the spectrum</li>
+          <li data-s="notes"><i></i>Recognising notes</li>
+          <li data-s="lengths"><i></i>Finding note lengths</li>
+          <li data-s="render"><i></i>Preparing playback</li>
+        </ol>
+        <div class="unlock" id="unlock" hidden>
+          <p id="unlock-text">Your MIDI unlocks after one short ad. Start it now and it will be ready sooner.</p>
+          <button class="btn btn-primary" id="unlock-btn" type="button">Watch ad to unlock</button>
+        </div>
+        <p class="work-note">Precise analysis takes time on long recordings. Keep this tab open.</p>
+        <button class="link-btn" id="cancel" type="button">Cancel</button>
+      </div>
+    </section>
+
+    <!-- RESULT -->
+    <section id="view-result" class="view view-wide" hidden>
+      <div class="result-head">
+        <div class="result-title">
+          <h2 id="res-name">Result</h2>
+          <div class="chips" id="res-chips"></div>
+        </div>
+        <div class="result-actions">
+          <button class="btn btn-ghost" id="res-new" type="button">New file</button>
+          <button class="btn btn-primary" id="res-download" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+            Download MIDI
+          </button>
+        </div>
+      </div>
+
+      <div class="roll-wrap" id="roll-wrap">
+        <canvas id="roll" aria-label="Piano roll"></canvas>
+        <div class="roll-hint" id="roll-hint">Scroll to zoom · drag to seek</div>
+      </div>
+
+      <div class="transport">
+        <button class="play" id="play" type="button" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>
+        </button>
+        <div class="seek">
+          <span class="time" id="t-now">0:00</span>
+          <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+          <span class="time" id="t-total">0:00</span>
+        </div>
+        <div class="seg seg-sm" id="src" role="radiogroup" aria-label="Playback source">
+          <button type="button" role="radio" aria-checked="true" data-v="midi">MIDI</button>
+          <button type="button" role="radio" aria-checked="false" data-v="orig">Original</button>
+          <button type="button" role="radio" aria-checked="false" data-v="both">Both</button>
+        </div>
+        <label class="vol"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><input id="vol" type="range" min="0" max="100" value="80" aria-label="Volume"></label>
+      </div>
+    </section>
+  </main>
+
+  <div id="ad-banner" class="ad-banner" hidden></div>
+
+  <footer class="foot">
+    <span>Notewright <span id="ver">1.0.0</span></span>
+    <span class="dot">·</span>
+    <span>Free and open source</span>
+    <span class="dot">·</span>
+    <a href="privacy.html">Privacy</a>
+  </footer>
+</div>
+
+<!-- Interstitial ad (unskippable until finished) -->
+<div id="ad" class="ad" hidden role="dialog" aria-modal="true" aria-label="Advertisement">
+  <div class="ad-card">
+    <div class="ad-top"><span class="ad-tag">Advertisement</span><span class="ad-count" id="ad-count"></span></div>
+    <div class="ad-body" id="ad-body"></div>
+    <div class="ad-bar"><i id="ad-bar-fill"></i></div>
+    <p class="ad-foot">Ads keep Notewright free. Watch to the end to unlock your MIDI; the conversion carries on in the background.</p>
+  </div>
+</div>
+
+<!-- About -->
+<dialog id="about" class="sheet">
+  <form method="dialog">
+    <div class="sheet-head">
+      <img src="assets/logo.svg" alt="" width="44" height="44">
+      <div><h3>Notewright</h3><small>Version <span id="about-ver">1.0.0</span></small></div>
+      <button class="icon-btn" value="close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <p>Piano audio to MIDI. The analysis, the note recogniser and the player are all built into the app and run on your device.</p>
+    <div class="update" id="update-box">
+      <div><strong id="update-title">Updates</strong><small id="update-sub">Check GitHub releases for a newer version.</small></div>
+      <button class="btn btn-ghost" id="update-check" type="button">Check now</button>
+    </div>
+    <button class="btn btn-ghost" id="privacy-options" type="button" hidden>Ad privacy choices</button>
+    <p class="fine">Released under the MIT licence. Audio never leaves this device.</p>
+    <p class="fine">Piano preview: Salamander Grand Piano by Alexander Holm, licensed <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>.</p>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

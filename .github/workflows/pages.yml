@@ -1,0 +1,39 @@
+name: Deploy web app
+
+# Publishes the single-file web app to GitHub Pages on every push to main.
+# One-time setup: repository Settings > Pages > Source: "GitHub Actions".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # the public site shows no ads until the repository variable WEB_ADS is set to true (docs/ADS.md, phase C)
+      - run: npm run build
+        env:
+          NW_ADS_ENABLED: ${{ vars.WEB_ADS || 'false' }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/web
+      - id: deploy
+        uses: actions/deploy-pages@v4

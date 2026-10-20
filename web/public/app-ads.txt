@@ -1,0 +1,2 @@
+# AdMob publisher line. Served at the root of the developer website listed on the Play Store page.
+google.com, pub-9875697224414534, DIRECT, f08c47fec0942fa0

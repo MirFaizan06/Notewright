@@ -1,0 +1,25 @@
+# build output
+dist/
+node_modules/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/keystore.properties
+android/ads.properties
+*.jks
+*.keystore
+*.apk
+*.aab
+
+# local tooling
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+tmp/
+viz*.png
+
+# training data and scratch (see tools/README.md)
+/data/

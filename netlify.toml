@@ -1,0 +1,15 @@
+# Netlify: connect the repository and deploy with no other settings.
+[build]
+  command = "npm run build"
+  publish = "dist/web"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # The public site shows no ads. Change to "true" only once website ads are set up (docs/ADS.md, phase C).
+  NW_ADS_ENABLED = "false"
+
+# app-ads.txt must be served as plain text from the site root
+[[headers]]
+  for = "/*.txt"
+  [headers.values]
+    Content-Type = "text/plain; charset=utf-8"
