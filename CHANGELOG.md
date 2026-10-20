@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-21
+
+### Fixed
+- Android: the app closed when using Back or the back gesture on Android 16 (the system no longer calls the old Back handler).
+- Android: the app was killed outright if the built-in browser engine ran out of memory; it now restarts the screen instead.
+- Android: content was drawn under the status and navigation bars on Android 15 and newer.
+- Android: an advertising SDK problem can no longer stop the app.
+- Lower memory use when preparing the piano preview: the piano recordings are decoded one at a time, as mono, only when a preview is needed.
+
+### Added
+- If the app stops, the next launch shows what happened with a Copy button, so it can be reported.
+
 ## [1.0.0] - 2026-10-20
 
 ### Added

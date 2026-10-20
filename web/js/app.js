@@ -3,7 +3,7 @@ import { createRewardGate, usesGate, mountBanner } from './ads.js';
 import { PianoRoll } from './roll.js';
 import { Player } from './player.js';
 import { checkForUpdate } from './update.js';
-import { renderPlayback, loadPiano } from './sampler.js';
+import { renderPlayback } from './sampler.js';
 
 const $ = (id) => document.getElementById(id);
 const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -423,5 +423,5 @@ setTimeout(() => {
   splash.classList.add('out');
   setTimeout(() => splash.remove(), 600);
 }, skipMotion ? 150 : 2100);
-// decode the piano recordings in the background so the first preview starts quickly
-setTimeout(() => { loadPiano().catch(() => {}); mountBanner(); }, 600);
+// (the piano recordings are decoded when the first preview is needed, not at startup: that keeps memory low on phones)
+setTimeout(() => { mountBanner(); }, 600);

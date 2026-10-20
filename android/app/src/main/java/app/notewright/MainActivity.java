@@ -1,15 +1,21 @@
 package app.notewright;
 
 import android.app.Activity;
+import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -19,8 +25,11 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
+import android.window.OnBackInvokedDispatcher;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -40,6 +49,7 @@ public class MainActivity extends Activity {
     private static final int BG = 0xFF14110E;
 
     private WebView web;
+    private LinearLayout root;
     private ValueCallback<Uri[]> pickCallback;
     private byte[] pendingSave;
     private AdProvider ads;
@@ -52,6 +62,7 @@ public class MainActivity extends Activity {
         MIME.put("css", "text/css");
         MIME.put("svg", "image/svg+xml");
         MIME.put("json", "application/json");
+        MIME.put("txt", "text/plain");
         MIME.put("webmanifest", "application/manifest+json");
         MIME.put("png", "image/png");
     }
@@ -67,20 +78,35 @@ public class MainActivity extends Activity {
             d.setSystemUiVisibility(d.getSystemUiVisibility() & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
 
-        ads = AdsFactory.create(this);
-        web = new WebView(this);
-        web.setBackgroundColor(BG);
+        // An ad SDK problem must never take the app down: fall back to no ads.
+        try { ads = AdsFactory.create(this); } catch (Throwable t) { CrashReporter.record(this, "ads: " + t); ads = new NoAdProvider(); }
+
         // the web app on top, a banner strip underneath (empty and collapsed unless an ad SDK is built in)
-        LinearLayout root = new LinearLayout(this);
+        root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        root.addView(web, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         bannerBox = new FrameLayout(this);
         bannerBox.setVisibility(View.GONE);
+        web = buildWebView();
+        root.addView(web, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(bannerBox, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         setContentView(root);
+        applySystemBarInsets(root);
 
-        WebSettings s = web.getSettings();
+        if (Build.VERSION.SDK_INT >= 33) {
+            // Android 13+ delivers Back through this callback (Android 16 no longer calls onBackPressed)
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
+        }
+
+        if (state != null) web.restoreState(state); else web.loadUrl(START_URL);
+        try { ads.start(this, bannerBox); } catch (Throwable t) { CrashReporter.record(this, "ads start: " + t); ads = new NoAdProvider(); }
+        showPreviousCrash();
+    }
+
+    private WebView buildWebView() {
+        WebView w = new WebView(this);
+        w.setBackgroundColor(BG);
+        WebSettings s = w.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(false);
@@ -89,9 +115,9 @@ public class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        web.addJavascriptInterface(new NativeBridge(this), "NotewrightNative");
+        w.addJavascriptInterface(new NativeBridge(this), "NotewrightNative");
 
-        web.setWebViewClient(new WebViewClient() {
+        w.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
@@ -104,7 +130,8 @@ public class MainActivity extends Activity {
                     String mime = MIME.containsKey(ext) ? MIME.get(ext) : "application/octet-stream";
                     return new WebResourceResponse(mime, "utf-8", in);
                 } catch (IOException e) {
-                    return new WebResourceResponse("text/plain", "utf-8", 404, "Not found", null, null);
+                    // unknown path (a favicon request, for instance): answer with an empty 404, never a null stream
+                    return new WebResourceResponse("text/plain", "utf-8", 404, "Not found", new HashMap<String, String>(), new ByteArrayInputStream(new byte[0]));
                 }
             }
 
@@ -114,9 +141,26 @@ public class MainActivity extends Activity {
                 try { startActivity(new Intent(Intent.ACTION_VIEW, r.getUrl())); } catch (ActivityNotFoundException ignored) { }
                 return true;
             }
+
+            /** If the browser engine's process dies (usually low memory) the app would be killed too; recover instead. */
+            @Override
+            public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail detail) {
+                CrashReporter.record(MainActivity.this, "WebView renderer " + (detail.didCrash() ? "crashed" : "was killed by the system (probably low memory)"));
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Notewright ran out of memory and restarted. Try a shorter recording.", Toast.LENGTH_LONG).show();
+                    if (root != null && web != null) {
+                        root.removeView(web);
+                        web.destroy();
+                        web = buildWebView();
+                        root.addView(web, 0, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+                        web.loadUrl(START_URL);
+                    }
+                });
+                return true;
+            }
         });
 
-        web.setWebChromeClient(new WebChromeClient() {
+        w.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (pickCallback != null) pickCallback.onReceiveValue(null);
@@ -134,9 +178,47 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+        return w;
+    }
 
-        if (state != null) web.restoreState(state); else web.loadUrl(START_URL);
-        ads.start(this, bannerBox);
+    /** From Android 15 apps draw behind the system bars; keep content and the banner clear of them. */
+    private void applySystemBarInsets(View v) {
+        v.setOnApplyWindowInsetsListener((view, insets) -> {
+            int l, t, r, b;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                l = i.left; t = i.top; r = i.right; b = i.bottom;
+            } else {
+                l = insets.getSystemWindowInsetLeft(); t = insets.getSystemWindowInsetTop();
+                r = insets.getSystemWindowInsetRight(); b = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(l, t, r, b);
+            return Build.VERSION.SDK_INT >= 30 ? WindowInsets.CONSUMED : insets.consumeSystemWindowInsets();
+        });
+        v.requestApplyInsets();
+    }
+
+    /** Shows the error from the previous run, if there was one, so it can be reported. */
+    private void showPreviousCrash() {
+        final String report = CrashReporter.takePending(this);
+        if (report == null) return;
+        TextView tv = new TextView(this);
+        tv.setText(report);
+        tv.setTextSize(11);
+        tv.setTextIsSelectable(true);
+        tv.setPadding(40, 20, 40, 20);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.addView(tv);
+        new AlertDialog.Builder(this)
+                .setTitle("Notewright stopped last time")
+                .setMessage("Please copy this and paste it into a new issue at github.com/MirFaizan06/Notewright/issues so it can be fixed.")
+                .setView(sv)
+                .setPositiveButton("Copy", (d, w) -> {
+                    ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Notewright crash report", report));
+                })
+                .setNegativeButton("Close", null)
+                .show();
     }
 
     /** Called by the bridge: write a file through the system "save as" dialog. */
@@ -150,18 +232,18 @@ public class MainActivity extends Activity {
     }
 
     private void emitAdEvent(String name) {
-        runOnUiThread(() -> web.evaluateJavascript("window.__nwAdEvent && window.__nwAdEvent('" + name + "')", null));
+        runOnUiThread(() -> { if (web != null) web.evaluateJavascript("window.__nwAdEvent && window.__nwAdEvent('" + name + "')", null); });
     }
 
-    void preloadReward() { ads.preloadReward(this, this::emitAdEvent); }
+    void preloadReward() { try { ads.preloadReward(this, this::emitAdEvent); } catch (Throwable t) { CrashReporter.record(this, "ads preload: " + t); emitAdEvent("failed"); } }
 
-    void showReward() { ads.showReward(this, this::emitAdEvent); }
+    void showReward() { try { ads.showReward(this, this::emitAdEvent); } catch (Throwable t) { CrashReporter.record(this, "ads show: " + t); emitAdEvent("failed"); } }
 
-    void setBannerVisible(boolean visible) { ads.setBannerVisible(visible); }
+    void setBannerVisible(boolean visible) { try { ads.setBannerVisible(visible); } catch (Throwable ignored) { } }
 
-    boolean privacyOptionsRequired() { return ads.privacyOptionsRequired(); }
+    boolean privacyOptionsRequired() { try { return ads.privacyOptionsRequired(); } catch (Throwable t) { return false; } }
 
-    void showPrivacyOptions() { ads.showPrivacyOptions(this); }
+    void showPrivacyOptions() { try { ads.showPrivacyOptions(this); } catch (Throwable ignored) { } }
 
     boolean hasNativeAds() { return ads.available(); }
 
@@ -190,23 +272,32 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
+    /** Back: let the web app handle it first (close a dialog, leave a result), then go back a page, then exit. */
+    private void handleBack() {
+        if (web == null) { finish(); return; }
         web.evaluateJavascript("window.__nwBack ? window.__nwBack() : false", value -> {
             if ("true".equals(value)) return;
-            if (web.canGoBack()) web.goBack(); else finish();   // e.g. back from the privacy page
+            if (web != null && web.canGoBack()) web.goBack(); else finish();
         });
+    }
+
+    /** Used on Android 12 and older; newer versions deliver Back to the callback registered in onCreate. */
+    @SuppressLint("GestureBackNavigation")
+    @Override
+    public void onBackPressed() {
+        handleBack();
     }
 
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
-        web.saveState(out);
+        // only the navigation history, kept small: the page rebuilds its own state
+        try { if (web != null) web.saveState(out); } catch (Throwable ignored) { }
     }
 
     @Override
     protected void onDestroy() {
-        if (web != null) { web.removeJavascriptInterface("NotewrightNative"); web.destroy(); }
+        if (web != null) { web.removeJavascriptInterface("NotewrightNative"); web.destroy(); web = null; }
         super.onDestroy();
     }
 }

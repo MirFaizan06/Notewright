@@ -14,7 +14,7 @@ public class NativeBridge {
     }
 
     @JavascriptInterface
-    public boolean hasNativeAds() { return activity.hasNativeAds(); }
+    public boolean hasNativeAds() { try { return activity.hasNativeAds(); } catch (Throwable t) { return false; } }
 
     @JavascriptInterface
     public void preloadReward() { activity.runOnUiThread(activity::preloadReward); }
@@ -26,7 +26,7 @@ public class NativeBridge {
     public void setBannerVisible(boolean visible) { activity.runOnUiThread(() -> activity.setBannerVisible(visible)); }
 
     @JavascriptInterface
-    public boolean privacyOptionsRequired() { return activity.privacyOptionsRequired(); }
+    public boolean privacyOptionsRequired() { try { return activity.privacyOptionsRequired(); } catch (Throwable t) { return false; } }
 
     @JavascriptInterface
     public void showPrivacyOptions() { activity.runOnUiThread(activity::showPrivacyOptions); }

@@ -29,6 +29,18 @@ function fromBase64(s) {
   return u8.buffer;
 }
 
+/** Averages the channels into a new mono buffer so the stereo original can be freed. */
+function toMono(ctx, buf) {
+  if (buf.numberOfChannels === 1) return buf;
+  const mono = ctx.createBuffer(1, buf.length, buf.sampleRate);
+  const dst = mono.getChannelData(0);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const src = buf.getChannelData(c);
+    for (let i = 0; i < dst.length; i++) dst[i] += src[i] / buf.numberOfChannels;
+  }
+  return mono;
+}
+
 /** Decodes all recordings once; later calls reuse the result. */
 export function loadPiano() {
   if (loading) return loading;
@@ -36,11 +48,14 @@ export function loadPiano() {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const inline = inlineData();
     const ctx = new OAC(1, 1, PIANO_RATE);
-    const buffers = await Promise.all(ROOTS.map(async (r) => {
+    // One at a time and straight to mono: decoding all 30 stereo recordings at once can use
+    // hundreds of megabytes, which is enough to make a phone's browser engine give up.
+    const out = [];
+    for (const r of ROOTS) {
       const bytes = inline ? fromBase64(inline[r.name]) : await (await fetch(new URL(`../assets/piano/${r.name}.mp3`, import.meta.url))).arrayBuffer();
-      return ctx.decodeAudioData(bytes);
-    }));
-    return ROOTS.map((r, i) => ({ ...r, buffer: buffers[i] }));
+      out.push({ ...r, buffer: toMono(ctx, await ctx.decodeAudioData(bytes)) });
+    }
+    return out;
   })();
   loading.catch(() => { loading = null; });
   return loading;
